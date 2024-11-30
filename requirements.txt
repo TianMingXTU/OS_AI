@@ -1,0 +1,6 @@
+# Core dependencies
+psutil>=5.9.0
+PyQt5>=5.15.9
+numpy>=1.24.0
+pandas>=2.0.0
+logging>=0.5.1.2
