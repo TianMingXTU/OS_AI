@@ -9,10 +9,11 @@ from typing import Dict, List
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, 
                             QHBoxLayout, QPushButton, QLabel, QProgressBar, 
                             QTabWidget, QTableWidget, QTableWidgetItem, QHeaderView,
-                            QSystemTrayIcon, QMenu, QStyle, QMessageBox)
+                            QSystemTrayIcon, QMenu, QStyle, QMessageBox, QListWidget, QListWidgetItem)
 from PyQt5.QtCore import Qt, QTimer, pyqtSignal, QThread
 from PyQt5.QtGui import QIcon, QPalette, QColor
-from PyQt5.QtChart import QChart, QChartView, QLineSeries
+from PyQt5.QtChart import QChart, QChartView, QLineSeries, QValueAxis
+from PyQt5.QtGui import QPainter
 
 from Core.task_scheduler import TaskScheduler
 from Tools.system_optimizer import SystemOptimizer
@@ -86,6 +87,229 @@ class SystemMonitorChart(QChartView):
         points.append(QPointF(len(points), value))
         self.series.replace(points)
 
+class MonitorPanel(QWidget):
+    """系统监控面板"""
+    
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
+        
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # 创建图表
+        charts_layout = QHBoxLayout()
+        
+        # CPU使用率图表
+        self.cpu_chart = self.create_chart("CPU使用率")
+        charts_layout.addWidget(self.cpu_chart)
+        
+        # 内存使用图表
+        self.memory_chart = self.create_chart("内存使用率")
+        charts_layout.addWidget(self.memory_chart)
+        
+        # 磁盘使用图表
+        self.disk_chart = self.create_chart("磁盘使用率")
+        charts_layout.addWidget(self.disk_chart)
+        
+        layout.addLayout(charts_layout)
+        
+        # 添加详细信息表格
+        self.details_table = QTableWidget()
+        self.details_table.setColumnCount(4)
+        self.details_table.setHorizontalHeaderLabels(['指标', '当前值', '平均值', '峰值'])
+        self.details_table.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.details_table)
+        
+    def create_chart(self, title):
+        """创建图表"""
+        series = QLineSeries()
+        
+        chart = QChart()
+        chart.addSeries(series)
+        chart.setTitle(title)
+        
+        # 设置坐标轴
+        axis_x = QValueAxis()
+        axis_x.setRange(0, 60)
+        axis_x.setLabelFormat("%d")
+        axis_x.setTitleText("时间 (秒)")
+        
+        axis_y = QValueAxis()
+        axis_y.setRange(0, 100)
+        axis_y.setLabelFormat("%d%")
+        axis_y.setTitleText("使用率")
+        
+        chart.addAxis(axis_x, Qt.AlignBottom)
+        chart.addAxis(axis_y, Qt.AlignLeft)
+        series.attachAxis(axis_x)
+        series.attachAxis(axis_y)
+        
+        chart_view = QChartView(chart)
+        chart_view.setRenderHint(QPainter.Antialiasing)
+        
+        return chart_view
+        
+    def update_charts(self, status):
+        """更新图表数据"""
+        # 更新CPU图表
+        cpu_series = self.cpu_chart.chart().series()[0]
+        self._update_series(cpu_series, status['cpu'])
+        
+        # 更新内存图表
+        memory_series = self.memory_chart.chart().series()[0]
+        self._update_series(memory_series, status['memory'])
+        
+        # 更新磁盘图表
+        disk_series = self.disk_chart.chart().series()[0]
+        self._update_series(disk_series, status['disk'])
+        
+        # 更新详细信息表格
+        self._update_details_table(status)
+        
+    def _update_series(self, series, value):
+        """更新图表序列数据"""
+        points = series.pointsVector()
+        if len(points) > 60:
+            points = points[1:]
+        points.append(QPointF(len(points), value))
+        series.replace(points)
+        
+    def _update_details_table(self, status):
+        """更新详细信息表格"""
+        self.details_table.setRowCount(3)
+        
+        # CPU信息
+        self.details_table.setItem(0, 0, QTableWidgetItem("CPU"))
+        self.details_table.setItem(0, 1, QTableWidgetItem(f"{status['cpu']}%"))
+        
+        # 内存信息
+        self.details_table.setItem(1, 0, QTableWidgetItem("内存"))
+        self.details_table.setItem(1, 1, QTableWidgetItem(f"{status['memory']}%"))
+        
+        # 磁盘信息
+        self.details_table.setItem(2, 0, QTableWidgetItem("磁盘"))
+        self.details_table.setItem(2, 1, QTableWidgetItem(f"{status['disk']}%"))
+
+class TaskManager(QWidget):
+    """任务管理器"""
+    
+    task_added = pyqtSignal(str, object)
+    
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
+        
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # 任务列表
+        self.task_list = QTableWidget()
+        self.task_list.setColumnCount(4)
+        self.task_list.setHorizontalHeaderLabels(['任务名称', '状态', '优先级', '下次执行'])
+        self.task_list.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.task_list)
+        
+        # 控制按钮
+        buttons_layout = QHBoxLayout()
+        
+        self.add_button = QPushButton('添加任务')
+        self.add_button.clicked.connect(self.add_task)
+        buttons_layout.addWidget(self.add_button)
+        
+        self.remove_button = QPushButton('删除任务')
+        self.remove_button.clicked.connect(self.remove_task)
+        buttons_layout.addWidget(self.remove_button)
+        
+        layout.addLayout(buttons_layout)
+        
+    def add_task(self):
+        """添加新任务"""
+        # TODO: 实现添加任务对话框
+        pass
+        
+    def remove_task(self):
+        """删除选中的任务"""
+        current_row = self.task_list.currentRow()
+        if current_row >= 0:
+            self.task_list.removeRow(current_row)
+
+class OptimizerPanel(QWidget):
+    """系统优化器面板"""
+    
+    def __init__(self):
+        super().__init__()
+        self.init_ui()
+        
+    def init_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # 优化选项列表
+        self.optimizer_list = QListWidget()
+        self.add_optimization_items()
+        layout.addWidget(self.optimizer_list)
+        
+        # 优化进度
+        self.progress_bar = QProgressBar()
+        layout.addWidget(self.progress_bar)
+        
+        # 控制按钮
+        buttons_layout = QHBoxLayout()
+        
+        self.optimize_button = QPushButton('开始优化')
+        self.optimize_button.clicked.connect(self.start_optimization)
+        buttons_layout.addWidget(self.optimize_button)
+        
+        self.stop_button = QPushButton('停止优化')
+        self.stop_button.clicked.connect(self.stop_optimization)
+        buttons_layout.addWidget(self.stop_button)
+        
+        layout.addLayout(buttons_layout)
+        
+        # 优化结果
+        self.results_table = QTableWidget()
+        self.results_table.setColumnCount(2)
+        self.results_table.setHorizontalHeaderLabels(['时间', '优化结果'])
+        self.results_table.horizontalHeader().setStretchLastSection(True)
+        layout.addWidget(self.results_table)
+        
+    def add_optimization_items(self):
+        """添加优化选项"""
+        optimization_items = [
+            '系统垃圾清理',
+            '启动项优化',
+            '服务优化',
+            '网络优化',
+            '磁盘碎片整理',
+            '系统缓存清理',
+            '注册表优化',
+            '系统设置优化'
+        ]
+        
+        for item in optimization_items:
+            list_item = QListWidgetItem(item)
+            list_item.setCheckState(Qt.Unchecked)
+            self.optimizer_list.addItem(list_item)
+            
+    def start_optimization(self):
+        """开始系统优化"""
+        self.progress_bar.setValue(0)
+        selected_items = []
+        
+        # 获取选中的优化项
+        for i in range(self.optimizer_list.count()):
+            item = self.optimizer_list.item(i)
+            if item.checkState() == Qt.Checked:
+                selected_items.append(item.text())
+                
+        # TODO: 实现优化逻辑
+        self.progress_bar.setValue(100)
+        
+    def stop_optimization(self):
+        """停止优化"""
+        # TODO: 实现停止优化逻辑
+        pass
+
 class OptimizationUI(QMainWindow):
     """系统优化主界面"""
     def __init__(self):
@@ -156,13 +380,9 @@ class OptimizationUI(QMainWindow):
         monitoring_tab = QWidget()
         monitoring_layout = QVBoxLayout(monitoring_tab)
         
-        # CPU使用率图表
-        self.cpu_chart = SystemMonitorChart("CPU使用率")
-        monitoring_layout.addWidget(self.cpu_chart)
-        
-        # 内存使用率图表
-        self.memory_chart = SystemMonitorChart("内存使用率")
-        monitoring_layout.addWidget(self.memory_chart)
+        # 监控面板
+        self.monitor_panel = MonitorPanel()
+        monitoring_layout.addWidget(self.monitor_panel)
         
         tabs.addTab(monitoring_tab, '系统监控')
         
@@ -170,14 +390,21 @@ class OptimizationUI(QMainWindow):
         schedule_tab = QWidget()
         schedule_layout = QVBoxLayout(schedule_tab)
         
-        # 任务列表
-        self.task_table = QTableWidget()
-        self.task_table.setColumnCount(4)
-        self.task_table.setHorizontalHeaderLabels(['任务名称', '状态', '上次运行', '下次运行'])
-        self.task_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        schedule_layout.addWidget(self.task_table)
+        # 任务管理器
+        self.task_manager = TaskManager()
+        schedule_layout.addWidget(self.task_manager)
         
         tabs.addTab(schedule_tab, '任务调度')
+        
+        # 优化器选项卡
+        optimizer_tab = QWidget()
+        optimizer_layout = QVBoxLayout(optimizer_tab)
+        
+        # 优化器面板
+        self.optimizer_panel = OptimizerPanel()
+        optimizer_layout.addWidget(self.optimizer_panel)
+        
+        tabs.addTab(optimizer_tab, '系统优化器')
         
         # 设置深色主题
         self.set_dark_theme()
@@ -272,27 +499,39 @@ class OptimizationUI(QMainWindow):
         """更新监控数据"""
         # 更新CPU使用率
         cpu_percent = psutil.cpu_percent()
-        self.cpu_chart.update_data(cpu_percent)
+        self.monitor_panel.cpu_chart.update_data(cpu_percent)
         
         # 更新内存使用率
         memory = psutil.virtual_memory()
-        self.memory_chart.update_data(memory.percent)
+        self.monitor_panel.memory_chart.update_data(memory.percent)
+        
+        # 更新磁盘使用率
+        disk = psutil.disk_usage('/')
+        self.monitor_panel.disk_chart.update_data(disk.percent)
+        
+        # 更新详细信息表格
+        status = {
+            'cpu': cpu_percent,
+            'memory': memory.percent,
+            'disk': disk.percent
+        }
+        self.monitor_panel.update_charts(status)
         
     def update_task_schedule(self):
         """更新任务调度信息"""
-        self.task_table.setRowCount(0)
+        self.task_manager.task_list.setRowCount(0)
         
         tasks = self.task_scheduler.get_task_status()
         for task in tasks:
-            row = self.task_table.rowCount()
-            self.task_table.insertRow(row)
+            row = self.task_manager.task_list.rowCount()
+            self.task_manager.task_list.insertRow(row)
             
-            self.task_table.setItem(row, 0, QTableWidgetItem(task['name']))
-            self.task_table.setItem(row, 1, QTableWidgetItem(
+            self.task_manager.task_list.setItem(row, 0, QTableWidgetItem(task['name']))
+            self.task_manager.task_list.setItem(row, 1, QTableWidgetItem(
                 '启用' if task['enabled'] else '禁用'))
-            self.task_table.setItem(row, 2, QTableWidgetItem(
+            self.task_manager.task_list.setItem(row, 2, QTableWidgetItem(
                 task['last_run'] or '从未运行'))
-            self.task_table.setItem(row, 3, QTableWidgetItem(
+            self.task_manager.task_list.setItem(row, 3, QTableWidgetItem(
                 task['next_run'] or '未计划'))
                 
     def closeEvent(self, event):

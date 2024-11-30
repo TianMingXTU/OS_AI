@@ -460,3 +460,29 @@ class PluginInterface:
 - 架构升级
 - 生态系统建设
 - 国际化支持
+
+### 14. 系统管理 APP 相关架构信息
+
+#### 14.1 系统管理 APP 架构
+```mermaid
+graph LR
+    A[系统管理 APP] --> B[用户管理]
+    B --> C[角色管理]
+    C --> D[权限管理]
+    D --> E[系统配置]
+```
+
+#### 14.2 系统管理 APP 功能
+- 用户管理
+- 角色管理
+- 权限管理
+- 系统配置
+
+#### 14.3 系统管理 APP 接口
+```python
+class SystemManagementAPP:
+    def manage_users(self)
+    def manage_roles(self)
+    def manage_permissions(self)
+    def configure_system(self)
+```
